@@ -12,8 +12,9 @@ def forward_backbone(backbone, x):
 
 
 class YOWO(EfficientDet):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, mid_frame, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mid_frame = mid_frame
 
         ##### 2D Backbone #####
         out = self.backbone(torch.zeros(1, 3, 256, 256))
@@ -30,8 +31,7 @@ class YOWO(EfficientDet):
             self.cfams.append(cfam)
 
     def forward(self, x):
-        mid_i = (x.size(2) - 1) // 2
-        x_2d = x[:, :, mid_i, :, :]  # Middle frame of the clip
+        x_2d = x[:, :, self.mid_frame, :, :]  # Main frame for detection
         x_3d = x  # Input clip
 
         x_2d = checkpoint(forward_backbone, self.backbone, x_2d)

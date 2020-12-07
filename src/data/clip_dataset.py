@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .utils import get_video_len, read_frames, read_img_cv2
+from .utils import get_video_len, read_img_cv2, read_video
 from .transforms import HorizontalFlip, ShiftScale
 
 class ClipDataset(Dataset):
@@ -18,10 +18,9 @@ class ClipDataset(Dataset):
         self.transforms = transforms        # Color transforms
         self.only_accidents = only_accidents
 
-        neighbors = np.abs(neighbors)
         self.min = min(neighbors)
         self.max = max(neighbors)
-        self.neighbors = np.array([-n for n in neighbors] + [0] + [n for n in neighbors])
+        self.neighbors = np.array(neighbors)
 
         self.flip = HorizontalFlip()
         self.shift_scale = ShiftScale(
@@ -31,7 +30,7 @@ class ClipDataset(Dataset):
         )
 
     def __getitem__(self, index):
-        index += self.max
+        index += abs(self.min)
         images, boxes, labels = self.load_images_and_boxes(index)
 
         if self.train:
@@ -63,7 +62,6 @@ class ClipDataset(Dataset):
             self.df['frame'].isin(frame_indexes+1)
         ].image_name.unique()
         images = [read_img_cv2(self.images_dir / image_name) for image_name in image_names]
-        # images = read_frames(self.video_path, frame_indexes)
 
         records = self.df[self.df['frame'] == (index + 1)].copy()
         if self.only_accidents:
@@ -80,4 +78,48 @@ class ClipDataset(Dataset):
         return images, boxes, labels
 
     def __len__(self):
-        return get_video_len(self.video_path) - self.max * 2
+        # return 5
+        return get_video_len(self.video_path) - self.max - abs(self.min)
+
+
+class ValidationClipDataset(Dataset):
+    def __init__(self, video_path, neighbors: tuple, df, transforms=tuple()):
+        self.video_path = Path(video_path)
+        self.df = df[df['video'] == self.video_path.name]
+        self.transforms = albu.Compose(list(transforms))
+
+        self.min = min(neighbors)
+        self.max = max(neighbors)
+        self.neighbors = np.array(neighbors)
+
+        self.video = read_video(video_path)
+
+    def __getitem__(self, index):
+        index += abs(self.min)
+        frame_num = index + 1
+
+        images, boxes = self.load_images_and_boxes(index)
+        for i in range(len(images)):
+            images[i] = self.transforms(image=images[i])['image']
+
+        return torch.stack(images, dim=1), boxes, frame_num
+
+    def load_images_and_boxes(self, index):
+        frame_indexes = self.neighbors + index
+        images = [self.video[i] for i in frame_indexes]
+
+        records = self.df[self.df['frame'] == (index + 1)].copy()
+        records = records[
+            (records['impact'] > 1) &
+            (records['confidence'] > 1) &
+            (records['visibility'] > 0)
+            ]
+        boxes = records[['left', 'top', 'width', 'height']].values
+        boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
+        boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
+
+        return images, boxes
+
+    def __len__(self):
+        return len(self.video) - self.max - abs(self.min)
+
