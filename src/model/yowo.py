@@ -1,9 +1,14 @@
 import torch
 import torch.nn as nn
 from effdet import EfficientDet
+from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 
 from src.model import resnext
 from src.model.cfam import CFAMBlock
+
+def forward_backbone(backbone, x):
+    out = backbone(x)
+    return tuple(out)
 
 
 class YOWO(EfficientDet):
@@ -29,14 +34,14 @@ class YOWO(EfficientDet):
         x_2d = x[:, :, mid_i, :, :]  # Middle frame of the clip
         x_3d = x  # Input clip
 
-        x_2d = self.backbone(x_2d)
-        x_3d = self.backbone_3d(x_3d)
+        x_2d = checkpoint(forward_backbone, self.backbone, x_2d)
+        x_3d = checkpoint(self.backbone_3d, x_3d)
 
         feature_maps = []
-        for x_2d_res, x_3d_res in zip(x_2d, x_3d):
-            x_3d_res = torch.squeeze(x_3d_res, dim=2)
+        for i, (x_2d_res, x_3d_res) in enumerate(zip(x_2d, x_3d)):
+            x_3d_res = x_3d_res[:, :, 0, :, :]
             x = torch.cat((x_3d_res, x_2d_res), dim=1)
-            x = self.cfam(x)
+            x = self.cfams[i](x)
             feature_maps += [x]
 
         # EffDet components

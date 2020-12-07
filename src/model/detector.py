@@ -1,15 +1,18 @@
 import torch
-from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain
+from effdet import get_efficientdet_config, DetBenchTrain
 from effdet.config import set_config_readonly, set_config_writeable
 
 from .yowo import YOWO
+
 
 def get_net(model_cfg, num_classes):
     config = get_efficientdet_config(model_cfg.efficientdet_config)
     net = YOWO(config, pretrained_backbone=True)
 
-    if model_cfg.pretrained_2d != '':
-        load_state_dict(net, model_cfg.pretrained)
+    if model_cfg.pretrained_effdet != '':
+        load_state_dict(net, model_cfg.pretrained_effdet)
+    if model_cfg.pretrained_backbone_3d != '':
+        load_state_dict(net, model_cfg.pretrained_backbone_3d)
 
     set_config_writeable(config)
     config.num_classes = num_classes
@@ -17,12 +20,13 @@ def get_net(model_cfg, num_classes):
     net.reset_head(num_classes=num_classes)
     set_config_readonly(config)
 
-    if model_cfg.start_from_2d != '':
+    if model_cfg.start_from != '':
         load_state_dict(net, model_cfg.start_from)
 
-    if model_cfg.freeze_first_epoch:
+    if model_cfg.freeze_backbone_2d:
         freeze(net.backbone)
-        freeze(net.fpn)
+    if model_cfg.freeze_backbone_3d:
+        freeze(net.backbone_3d)
 
     return DetBenchTrain(net, config)
 
