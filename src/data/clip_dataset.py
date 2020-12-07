@@ -6,13 +6,15 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .utils import get_video_len, read_frames
+from .utils import get_video_len, read_frames, read_img_cv2
 from .transforms import HorizontalFlip, ShiftScale
 
 class ClipDataset(Dataset):
-    def __init__(self, video_path, neighbors: tuple, df, transforms=None, only_accidents=False):
+    def __init__(self, video_path, neighbors: tuple, df, train: bool, transforms=None, only_accidents=False):
         self.video_path = Path(video_path)
-        self.df = df
+        self.images_dir = self.video_path.parent.parent / 'train_images'
+        self.df = df[df['video'] == self.video_path.name]
+        self.train = train
         self.transforms = transforms        # Color transforms
         self.only_accidents = only_accidents
 
@@ -32,13 +34,15 @@ class ClipDataset(Dataset):
         index += self.max
         images, boxes, labels = self.load_images_and_boxes(index)
 
-        images, boxes, labels = self.shift_scale(*self.flip(images, boxes, labels))
-
+        if self.train:
+            images, boxes, labels = self.shift_scale(*self.flip(images, boxes, labels))
         # Color augmentation for each frame independently
         if self.transforms is not None:
             for i in range(len(images)):
                 images[i] = self.transforms(
                     image=images[i],
+                    bboxes=boxes,
+                    labels=labels,
                 )['image']
 
         boxes = torch.stack(tuple(
@@ -46,16 +50,22 @@ class ClipDataset(Dataset):
         )).permute(1, 0)
         boxes[:, [0, 1, 2, 3]] = boxes[:, [1, 0, 3, 2]]  # yxyx: be warning
 
-        return torch.stack(images), boxes, torch.tensor(labels)
+        target = dict(
+            boxes=boxes,
+            labels=torch.tensor(labels),
+        )
+
+        return torch.stack(images, dim=1), target
 
     def load_images_and_boxes(self, index):
         frame_indexes = self.neighbors + index
-        images = read_frames(self.video_path, frame_indexes)
+        image_names = self.df[
+            self.df['frame'].isin(frame_indexes+1)
+        ].image_name.unique()
+        images = [read_img_cv2(self.images_dir / image_name) for image_name in image_names]
+        # images = read_frames(self.video_path, frame_indexes)
 
-        records = self.df[
-            (self.df['video'] == self.video_path.name) &
-            (self.df['frame'] == (index + 1))
-            ].copy()
+        records = self.df[self.df['frame'] == (index + 1)].copy()
         if self.only_accidents:
             records = records[
                 (records['impact'] > 1) &
