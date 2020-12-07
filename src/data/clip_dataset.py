@@ -7,13 +7,13 @@ import torch
 from torch.utils.data import Dataset
 
 from .utils import get_video_len, read_frames
-
+from .transforms import HorizontalFlip, ShiftScale
 
 class ClipDataset(Dataset):
     def __init__(self, video_path, neighbors: tuple, df, transforms=None, only_accidents=False):
         self.video_path = Path(video_path)
         self.df = df
-        self.transforms = transforms
+        self.transforms = transforms        # Color transforms
         self.only_accidents = only_accidents
 
         neighbors = np.abs(neighbors)
@@ -21,28 +21,24 @@ class ClipDataset(Dataset):
         self.max = max(neighbors)
         self.neighbors = np.array([-n for n in neighbors] + [0] + [n for n in neighbors])
 
+        self.flip = HorizontalFlip()
+        self.shift_scale = ShiftScale(
+            shift_limit=(-0.1, 0.1),
+            scale_limit=(-0.5, 0.5),
+            p=0.5
+        )
+
     def __getitem__(self, index):
         index += self.max
         images, boxes, labels = self.load_images_and_boxes(index)
 
-        # Flip all images
-        if random.random() > 0.5:     # TODO replace to beautiful transform
-            for i in range(len(images)):
-                sample = albu.HorizontalFlip(p=1.0)(
-                    image=images[i],
-                    bboxes=boxes,
-                    labels=np.ones(boxes.shape[0]),
-                )
-                images[i] = sample['image']
-            boxes = sample['bboxes']
+        images, boxes, labels = self.shift_scale(*self.flip(images, boxes, labels))
 
         # Color augmentation for each frame independently
         if self.transforms is not None:
             for i in range(len(images)):
                 images[i] = self.transforms(
                     image=images[i],
-                    bboxes=boxes,
-                    labels=np.ones(boxes.shape[0]),
                 )['image']
 
         boxes = torch.stack(tuple(
