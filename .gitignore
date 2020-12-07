@@ -1,0 +1,5 @@
+pretrained_weights/
+.idea/
+checkpoints/
+.ipynb_checkpoints
+__pycache__/

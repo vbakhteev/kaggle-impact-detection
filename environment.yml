@@ -1,0 +1,17 @@
+name: nfl_yowo
+
+dependencies:
+  - python=3.7.6
+  - pip:
+    - torch==1.6.0
+    - torchvision==0.7.0
+    - timm==0.3.1
+    - pycocotools==2.0.2
+    - omegaconf==2.0.5
+    - effdet==0.2.1
+    - matplotlib
+    - pandas
+    - tqdm
+    - albumentations
+    - easydict
+    - sklearn
