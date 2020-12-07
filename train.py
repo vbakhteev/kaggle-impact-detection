@@ -153,6 +153,7 @@ class Fitter:
             gt_video, video_preds, video_scores = self.predict_single_video(
                 inference_model=inference_model, val_loader=val_loader,
             )
+            gt += [gt_video]
             preds += [video_preds]
             scores += [video_scores]
 
