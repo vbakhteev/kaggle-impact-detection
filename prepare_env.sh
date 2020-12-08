@@ -6,5 +6,5 @@ mv tf_efficientdet_d6_52-4eda3773.pth pretrained_weights
 wget https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7_53-6d1d7a95.pth
 mv tf_efficientdet_d7_53-6d1d7a95.pth pretrained_weights
 
-python prepare_two_class_detection.py
+python video_to_images.py
 python validation_split.py

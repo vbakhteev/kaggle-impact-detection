@@ -78,7 +78,7 @@ valid_pipeline = A.Compose(
 )
 
 data = EasyDict(dict(
-    root=Path('/home/vladbakhteev/data/nfl-impact-detection'),
+    root=Path('/dataset/nfl'),
     train_only_accidents=False,
     frames_neighbors=(-12, -9, -6, -3, 0, 3, 6, 9, 12),
     train_pipeline=train_pipeline,
