@@ -11,7 +11,7 @@ from tqdm import tqdm
 from config import data as data_cfg, model as model_cfg, train as train_cfg
 from src.data.loaders import get_dataloaders
 from src.metric import comp_metric
-from src.model.detector import get_net
+from src.model.detector import get_net, unfreeze
 from src.utils import seed_everything, AverageMeter
 
 
@@ -70,17 +70,20 @@ class Fitter:
                 timestamp = datetime.utcnow().isoformat()
                 self.log(f'\n{timestamp}\nLR: {lr}')
 
-            # summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch(train_loader)
-            # self.log(f'[RESULT]: Train. Epoch: {self.epoch}, '
-            #          f'loss: {summary_loss.avg:.5f}, '
-            #          f'class_loss: {summary_class_loss.avg:.5f}, '
-            #          f'box_loss: {summary_box_loss.avg:.5f}')
+            summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch(train_loader)
+            self.log(f'[RESULT]: Train. Epoch: {self.epoch}, '
+                     f'loss: {summary_loss.avg:.5f}, '
+                     f'class_loss: {summary_class_loss.avg:.5f}, '
+                     f'box_loss: {summary_box_loss.avg:.5f}')
 
             threshold, metric, videos_scores = self.validation(validation_loaders_fn)
             self.log(f'[RESULT]: Val. Epoch: {self.epoch}, threshold: {threshold}, metric: {metric:.5f}')
             self.save(self.base_dir / 'last-checkpoint.bin')
             if train_cfg.validation_scheduler:
                 self.scheduler.step(metrics=metric)
+
+            if model_cfg.unfreeze_after_first_epoch:
+                unfreeze(self.model)
 
             if metric > self.best_metric:
                 self.best_metric = metric

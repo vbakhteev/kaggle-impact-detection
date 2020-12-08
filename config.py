@@ -11,8 +11,8 @@ def get_padded_size(side, div=128):
     return math.ceil(side / div) * div
 
 
-# img_size = (720, 1280)
-img_size = (360, 640)
+img_size = (720, 1280)
+# img_size = (360, 640)
 padded_img_size = (get_padded_size(img_size[0]), get_padded_size(img_size[1]))
 
 pre_transforms = [
@@ -124,4 +124,5 @@ model = EasyDict(dict(
 
     freeze_backbone_2d=False,
     freeze_backbone_3d=False,
+    unfreeze_after_first_epoch=False,
 ))
