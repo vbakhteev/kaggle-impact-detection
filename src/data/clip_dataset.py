@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .utils import get_video_len, read_img_jpeg4py, read_video
+from .utils import get_video_len, read_img_cv2, read_video
 from .transforms import HorizontalFlip, ShiftScale
 
 class ClipDataset(Dataset):
@@ -60,7 +60,7 @@ class ClipDataset(Dataset):
         image_names = self.df[
             self.df['frame'].isin(frame_indexes+1)
         ].image_name.unique()
-        images = [read_img_jpeg4py(self.images_dir / image_name) for image_name in image_names]
+        images = [read_img_cv2(self.images_dir / image_name) for image_name in image_names]
 
         records = self.df[self.df['frame'] == (index + 1)].copy()
         if self.only_accidents:

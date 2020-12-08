@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from effdet import DetBenchPredict
+from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 from config import data as data_cfg, model as model_cfg, train as train_cfg
@@ -57,6 +58,7 @@ class Fitter:
             {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
 
+        self.scaler = GradScaler()
         self.optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=train_cfg.lr)
         self.scheduler = train_cfg.SchedulerClass(self.optimizer, **train_cfg.scheduler_params)
         self.log(f'Fitter prepared. Device is {self.device}')
@@ -68,11 +70,11 @@ class Fitter:
                 timestamp = datetime.utcnow().isoformat()
                 self.log(f'\n{timestamp}\nLR: {lr}')
 
-            summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch(train_loader)
-            self.log(f'[RESULT]: Train. Epoch: {self.epoch}, '
-                     f'loss: {summary_loss.avg:.5f}, '
-                     f'class_loss: {summary_class_loss.avg:.5f}, '
-                     f'box_loss: {summary_box_loss.avg:.5f}')
+            # summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch(train_loader)
+            # self.log(f'[RESULT]: Train. Epoch: {self.epoch}, '
+            #          f'loss: {summary_loss.avg:.5f}, '
+            #          f'class_loss: {summary_class_loss.avg:.5f}, '
+            #          f'box_loss: {summary_box_loss.avg:.5f}')
 
             threshold, metric, videos_scores = self.validation(validation_loaders_fn)
             self.log(f'[RESULT]: Val. Epoch: {self.epoch}, threshold: {threshold}, metric: {metric:.5f}')
@@ -110,16 +112,18 @@ class Fitter:
                   f'box_loss: {summary_box_loss.avg:.5f}'
             it.set_description(msg)
 
-            loss, class_loss, box_loss, _ = self.one_forward(images, targets)
+            with autocast():
+                loss, class_loss, box_loss, _ = self.one_forward(images, targets)
 
             # Faster than optimizer.zero_grad()
             for param in self.model.parameters():
                 param.grad = None
 
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
             if train_cfg.step_scheduler:
                 self.scheduler.step()
+            self.scaler.update()
 
             bs = len(images)
             summary_loss.update(loss.item(), bs)
@@ -180,7 +184,8 @@ class Fitter:
             images = images.to(self.device).float()
 
             with torch.no_grad():
-                output = inference_model(images)
+                with autocast():
+                    output = inference_model(images)
                 output = output.cpu().numpy()
 
             height_scale = 720 / model_cfg.img_size[0]
