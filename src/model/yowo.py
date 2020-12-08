@@ -34,8 +34,12 @@ class YOWO(EfficientDet):
         x_2d = x[:, :, self.mid_frame, :, :]  # Main frame for detection
         x_3d = x  # Input clip
 
-        x_2d = checkpoint(forward_backbone, self.backbone, x_2d)
-        x_3d = checkpoint(self.backbone_3d, x_3d)
+        if self.training:
+            x_2d = checkpoint(forward_backbone, self.backbone, x_2d)
+            x_3d = checkpoint(self.backbone_3d, x_3d)
+        else:
+            x_2d = self.backbone(x_2d)
+            x_3d = self.backbone_3d(x_3d)
 
         feature_maps = []
         for i, (x_2d_res, x_3d_res) in enumerate(zip(x_2d, x_3d)):

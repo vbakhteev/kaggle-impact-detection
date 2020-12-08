@@ -10,11 +10,10 @@ from .utils import get_video_len, read_img_cv2, read_video
 from .transforms import HorizontalFlip, ShiftScale
 
 class ClipDataset(Dataset):
-    def __init__(self, video_path, neighbors: tuple, df, train: bool, transforms=None, only_accidents=False):
+    def __init__(self, video_path, neighbors: tuple, df, transforms=None, only_accidents=False):
         self.video_path = Path(video_path)
         self.images_dir = self.video_path.parent.parent / 'train_images'
         self.df = df[df['video'] == self.video_path.name]
-        self.train = train
         self.transforms = transforms        # Color transforms
         self.only_accidents = only_accidents
 
@@ -33,17 +32,17 @@ class ClipDataset(Dataset):
         index += abs(self.min)
         images, boxes, labels = self.load_images_and_boxes(index)
 
-        if self.train:
-            images, boxes, labels = self.shift_scale(*self.flip(images, boxes, labels))
+        images, boxes, labels = self.shift_scale(*self.flip(images, boxes, labels))
         # Color augmentation for each frame independently
-        if self.transforms is not None:
-            for i in range(len(images)):
-                images[i] = self.transforms(
-                    image=images[i],
-                    bboxes=boxes,
-                    labels=labels,
-                )['image']
+        for i in range(len(images)):
+            sample = self.transforms(
+                image=images[i],
+                bboxes=boxes,
+                labels=labels,
+            )
+            images[i] = sample['image']
 
+        boxes = sample['bboxes']
         boxes = torch.stack(tuple(
             map(torch.tensor, zip(*boxes))
         )).permute(1, 0)

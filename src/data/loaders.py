@@ -22,7 +22,6 @@ def get_dataloaders(data_cfg, train_cfg):
             video_path=root / 'train' / video_name,
             neighbors=data_cfg.frames_neighbors,
             df=df_train[df_train['video'] == video_name],
-            train=True,
             only_accidents=data_cfg.train_only_accidents,
             transforms=data_cfg.train_pipeline,
         )
@@ -41,13 +40,14 @@ def get_dataloaders(data_cfg, train_cfg):
 
     valid_loaders_fn = partial(
         get_valid_dataloaders,
-        root=root, data_cfg=data_cfg, train_cfg=train_cfg,
+        data_cfg=data_cfg, train_cfg=train_cfg,
     )
 
     return train_loader, valid_loaders_fn
 
 
-def get_valid_dataloaders(root, data_cfg, train_cfg):
+def get_valid_dataloaders(data_cfg, train_cfg):
+    root = data_cfg.root
     df = pd.read_csv(root / 'train_labels.csv')
     df['impact'] = df['impact'] + 1
     valid_split = pd.read_csv(root / 'validation_split.csv')

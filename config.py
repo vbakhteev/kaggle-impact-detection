@@ -117,11 +117,11 @@ model = EasyDict(dict(
     efficientdet_config='tf_efficientdet_d5',
     img_size=padded_img_size,
 
-    pretrained_effdet='./pretrained_weights/images_pretrained_d5.bin',
+    pretrained_effdet='',
     pretrained_backbone_3d='',
     # if `start_from` is not empty then these weights overwrites pretrained weights.
     start_from='',
 
-    freeze_backbone_2d=True,
+    freeze_backbone_2d=False,
     freeze_backbone_3d=False,
 ))

@@ -173,7 +173,7 @@ class Fitter:
         return best_threshold, best_metric, videos_best_scores
 
     def predict_single_video(self, inference_model, val_loader):
-        video_gt_boxes, video_boxes, video_scores, video_frames = [], [], [], []
+        video_gt_boxes, video_boxes, video_scores, video_frames_preds, video_frames_gt = [], [], [], [], []
 
         for images, gt_boxes, frame_ids in val_loader:
             images = torch.stack(images)
@@ -198,25 +198,27 @@ class Fitter:
                 sample_output[sample_indexes]
                 for sample_output, sample_indexes in zip(output, indexes)
             ]
+
             boxes = [o[:, :4].astype(int) for o in output]
             scores = [o[:, 4] for o in output]
             video_boxes += boxes
             video_scores += scores
+            video_frames_preds += frame_ids
 
             # Keep GT boxes and frame_ids
             for gt_boxes_sample, frame_id in zip(gt_boxes, frame_ids):
                 if gt_boxes_sample.shape[0] > 0:
                     video_gt_boxes.append(gt_boxes_sample)
-                    video_frames += [frame_id] * gt_boxes_sample.shape[0]
+                    video_frames_gt += [frame_id] * gt_boxes_sample.shape[0]
 
         # Concatenate frame's ids and corresponding GT boxes
         video_gt_boxes = np.concatenate(video_gt_boxes, axis=0)
-        video_frames = np.array(video_frames)[:, np.newaxis]
-        gt_video = np.concatenate((video_frames, video_gt_boxes), axis=1)
+        video_frames_gt = np.array(video_frames_gt)[:, np.newaxis]
+        gt_video = np.concatenate((video_frames_gt, video_gt_boxes), axis=1)
 
         # Concatenate frame's ids and corresponding predicted boxes
         video_preds = []
-        for frame_id, boxes_sample in enumerate(video_boxes):
+        for frame_id, boxes_sample in zip(video_frames_preds, video_boxes):
             frame_id_repeated = np.full((boxes_sample.shape[0], 1), frame_id)
             frame_and_boxes = np.concatenate((frame_id_repeated, boxes_sample), axis=1)
             video_preds += [frame_and_boxes]
