@@ -92,16 +92,16 @@ class ValidationClipDataset(Dataset):
         self.max = max(neighbors)
         self.neighbors = np.array(neighbors)
 
-        self.video = read_video(video_path)
+        video = read_video(video_path)
+        self.video = torch.stack([
+            self.transforms(image=img)['image'] for img in video
+        ])
 
     def __getitem__(self, index):
         index += abs(self.min)
         frame_num = index + 1
 
         images, boxes = self.load_images_and_boxes(index)
-        for i in range(len(images)):
-            images[i] = self.transforms(image=images[i])['image']
-
         return torch.stack(images, dim=1), boxes, frame_num
 
     def load_images_and_boxes(self, index):
