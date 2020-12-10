@@ -45,7 +45,7 @@ class YOWO(EfficientDet):
         for i, (x_2d_res, x_3d_res) in enumerate(zip(x_2d, x_3d)):
             x_3d_res = x_3d_res[:, :, 0, :, :]
             x = torch.cat((x_3d_res, x_2d_res), dim=1)
-            x = self.cfams[i](x)
+            x = self.cfams[i](x) + x_2d_res
             feature_maps += [x]
 
         # EffDet components

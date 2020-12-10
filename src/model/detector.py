@@ -9,8 +9,8 @@ def get_net(model_cfg, num_classes, mid_frame):
     config = get_efficientdet_config(model_cfg.efficientdet_config)
     net = YOWO(mid_frame, config, pretrained_backbone=True)
 
-    # if model_cfg.pretrained_effdet != '':
-    #     load_state_dict(net, model_cfg.pretrained_effdet)
+    if model_cfg.pretrained_effdet != '':
+        load_state_dict(net, model_cfg.pretrained_effdet)
     if model_cfg.pretrained_backbone_3d != '':
         load_state_dict(net, model_cfg.pretrained_backbone_3d)
 

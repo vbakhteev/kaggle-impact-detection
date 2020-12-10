@@ -7,7 +7,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from easydict import EasyDict
 
 
-DESCRIPTION = "512,884 lr=0.00005, start from pretrained "
+DESCRIPTION = "Add skip connection in cfam and pretrained effdet"
 
 
 def get_padded_size(side, div=128):
