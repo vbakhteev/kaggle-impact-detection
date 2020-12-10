@@ -19,10 +19,14 @@ class ImageDataset(Dataset):
     def __getitem__(self, index):
         image, boxes, labels = self.load_image_and_boxes(index)
 
-        sample = self.transforms(image=image, bboxes=boxes, labels=labels)
-        image = sample['image']
-        boxes = sample['bboxes']
-        labels = sample['labels']
+        for _ in range(100):
+            sample = self.transforms(image=image, bboxes=boxes, labels=labels)
+
+            if len(sample['bboxes']) > 0:
+                image = sample['image']
+                boxes = sample['bboxes']
+                labels = sample['labels']
+                break
 
         boxes = torch.stack(tuple(
             map(torch.tensor, zip(*boxes))
