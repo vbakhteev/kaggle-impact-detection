@@ -8,7 +8,7 @@ from effdet import DetBenchPredict
 from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
-from config import data as data_cfg, model as model_cfg, train as train_cfg
+from config import data as data_cfg, model as model_cfg, train as train_cfg, DESCRIPTION
 from src.data.loaders import get_dataloaders
 from src.metric import comp_metric
 from src.model.detector import get_net, unfreeze
@@ -62,6 +62,7 @@ class Fitter:
         self.optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=train_cfg.lr)
         self.scheduler = train_cfg.SchedulerClass(self.optimizer, **train_cfg.scheduler_params)
         self.log(f'Fitter prepared. Device is {self.device}')
+        self.log(DESCRIPTION)
 
     def fit(self, train_loader, validation_loaders_fn):
         for e in range(train_cfg.n_epochs):
@@ -76,17 +77,20 @@ class Fitter:
                      f'class_loss: {summary_class_loss.avg:.5f}, '
                      f'box_loss: {summary_box_loss.avg:.5f}')
 
-            threshold, metric, videos_scores = self.validation(validation_loaders_fn)
-            self.log(f'[RESULT]: Val. Epoch: {self.epoch}, threshold: {threshold}, metric: {metric:.5f}')
+            threshold, f1, recall, precision, videos_scores = self.validation(validation_loaders_fn)
+            self.log(f'[RESULT]: Val. Epoch: {self.epoch}, threshold: {threshold}, F1: {f1:.5f},'
+                     f' Recall: {recall:.5f}, Precision: {precision:.5f}')
+            self.log('F1 per video: ' +
+                     ' '.join([f'{score:.3f}' for score in videos_scores]))
             self.save(self.base_dir / 'last-checkpoint.bin')
             if train_cfg.validation_scheduler:
-                self.scheduler.step(metrics=metric)
+                self.scheduler.step(metrics=f1)
 
             if model_cfg.unfreeze_after_first_epoch:
                 unfreeze(self.model)
 
-            if metric > self.best_metric:
-                self.best_metric = metric
+            if f1 > self.best_metric:
+                self.best_metric = f1
                 self.model.eval()
                 self.save(self.base_dir / f'best-checkpoint-{str(self.epoch).zfill(3)}epoch.bin')
                 for path in sorted(self.base_dir.glob('best-checkpoint-*epoch.bin'))[:-3]:
@@ -156,7 +160,7 @@ class Fitter:
         inference_model = DetBenchPredict(self.model.model).to(self.device)
 
         gt, preds, scores = [], [], []
-        for val_loader in tqdm(val_loaders_fn(), total=24):
+        for val_loader in tqdm(val_loaders_fn(), total=16):
             gt_video, video_preds, video_scores = self.predict_single_video(
                 inference_model=inference_model, val_loader=val_loader,
             )
@@ -164,20 +168,20 @@ class Fitter:
             preds += [video_preds]
             scores += [video_scores]
 
-        best_threshold, _, _ = self.find_best_threshold(
+        best_threshold, _, _, _, _ = self.find_best_threshold(
             thresholds=np.arange(0, 1, 0.05),
             gt=gt,
             preds=preds,
             scores=scores
         )
-        best_threshold, best_metric, videos_best_scores = self.find_best_threshold(
+        best_threshold, best_f1, best_rc, best_pr, videos_best_scores = self.find_best_threshold(
             thresholds=np.arange(best_threshold - 0.04, best_threshold + 0.04, 0.01),
             gt=gt,
             preds=preds,
             scores=scores
         )
 
-        return best_threshold, best_metric, videos_best_scores
+        return best_threshold, best_f1, best_rc, best_pr, videos_best_scores
 
     def predict_single_video(self, inference_model, val_loader):
         video_gt_boxes, video_boxes, video_scores, video_frames_preds, video_frames_gt = [], [], [], [], []
@@ -238,7 +242,7 @@ class Fitter:
         return gt_video, video_preds, video_scores
 
     def find_best_threshold(self, thresholds, gt, preds, scores):
-        best_metric = best_threshold = -1
+        best_rc = best_pr = best_f1 = best_threshold = -1
         videos_best_scores = None
 
         for threshold in thresholds:
@@ -249,12 +253,14 @@ class Fitter:
                 thresholded_preds += [thresholded_video_preds]
 
             precision, recall, f1_score, f1_per_video = comp_metric(thresholded_preds, gt)
-            if f1_score > best_metric:
-                best_metric = f1_score
+            if f1_score > best_f1:
+                best_f1 = f1_score
+                best_rc = recall
+                best_pr = precision
                 best_threshold = threshold
                 videos_best_scores = f1_per_video
 
-        return best_threshold, best_metric, videos_best_scores
+        return best_threshold, best_f1, best_rc, best_pr, videos_best_scores
 
     def save(self, path):
         self.model.eval()

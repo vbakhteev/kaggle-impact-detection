@@ -27,7 +27,7 @@ def main():
         break
 
     df_videos = df_videos.drop(['impact', 'quantile'], axis=1)
-    df_videos.to_csv('validation_split.csv', index=False)
+    df_videos.to_csv(root / 'validation_split.csv', index=False)
 
     # Images validation split
     df = pd.read_csv(root / 'image_labels.csv')
@@ -54,3 +54,7 @@ def main():
     new_df.loc[val_idxs, 'train'] = 0
 
     new_df.to_csv(root / 'images_validation_split.csv', index=False)
+
+
+if __name__=='__main__':
+    main()

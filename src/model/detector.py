@@ -9,8 +9,8 @@ def get_net(model_cfg, num_classes, mid_frame):
     config = get_efficientdet_config(model_cfg.efficientdet_config)
     net = YOWO(mid_frame, config, pretrained_backbone=True)
 
-    if model_cfg.pretrained_effdet != '':
-        load_state_dict(net, model_cfg.pretrained_effdet)
+    # if model_cfg.pretrained_effdet != '':
+    #     load_state_dict(net, model_cfg.pretrained_effdet)
     if model_cfg.pretrained_backbone_3d != '':
         load_state_dict(net, model_cfg.pretrained_backbone_3d)
 
@@ -35,6 +35,8 @@ def load_state_dict(model, path):
     checkpoint = torch.load(path, map_location='cpu')
     if 'model_state_dict' in checkpoint:
         checkpoint = checkpoint['model_state_dict']
+    if 'state_dict' in checkpoint:
+        checkpoint = checkpoint['state_dict']
 
     # model.load_state_dict(checkpoint)
     soft_load_state_dict(model, checkpoint)
@@ -43,8 +45,13 @@ def load_state_dict(model, path):
 def soft_load_state_dict(model, state_dict):
     model_state = model.state_dict()
 
+    not_loaded_params = []
     for name, param in state_dict.items():
+        if name.startswith('module.'):
+            name = name[7:]
+
         if name not in model_state or model_state[name].shape != param.shape:
+            not_loaded_params += [name]
             continue
 
         if isinstance(param, torch.nn.Parameter):
@@ -52,6 +59,8 @@ def soft_load_state_dict(model, state_dict):
             param = param.data
         model_state[name].copy_(param)
 
+    if len(not_loaded_params):
+        print("WARNING: following params couldn't loaded into model:", not_loaded_params)
 
 def freeze(model):
     for param in model.parameters():
