@@ -1,5 +1,5 @@
 import torch
-from effdet import get_efficientdet_config, DetBenchTrain
+from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain
 from effdet.config import set_config_readonly, set_config_writeable
 
 from .yowo import YOWO
@@ -27,6 +27,28 @@ def get_net(model_cfg, num_classes, mid_frame):
         freeze(net.backbone)
     if model_cfg.freeze_backbone_3d:
         freeze(net.backbone_3d)
+
+    return DetBenchTrain(net, config)
+
+
+def get_effdet(model_cfg, num_classes):
+    config = get_efficientdet_config(model_cfg.efficientdet_config)
+    net = EfficientDet(config, pretrained_backbone=True)
+
+    if model_cfg.pretrained_effdet != '':
+        load_state_dict(net, model_cfg.pretrained_effdet)
+
+    set_config_writeable(config)
+    config.num_classes = num_classes
+    config.image_size = model_cfg.img_size
+    net.reset_head(num_classes=num_classes)
+    set_config_readonly(config)
+
+    if model_cfg.start_from != '':
+        load_state_dict(net, model_cfg.start_from)
+
+    if model_cfg.freeze_backbone_2d:
+        freeze(net.backbone)
 
     return DetBenchTrain(net, config)
 

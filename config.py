@@ -7,7 +7,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from easydict import EasyDict
 
 
-DESCRIPTION = "Add skip connection in cfam and pretrained effdet"
+DESCRIPTION = "Pretrain 2D detection"
 
 
 def get_padded_size(side, div=128):
@@ -22,6 +22,10 @@ pre_transforms = [
     A.Resize(height=img_size[0], width=img_size[1]),
 ]
 augmentations = [
+    # These geometric transforms are only for 2d detector!
+    # A.HorizontalFlip(p=0.5),
+    # A.ShiftScaleRotate(shift_limit=(-0.1, 0.1), scale_limit=(-0.5, 0.5), p=0.5),
+
     A.Cutout(num_holes=200, max_h_size=img_size[0] // 72, max_w_size=img_size[0] // 72, p=0.3),
     A.OneOf([
         A.ChannelShuffle(p=1.0),
