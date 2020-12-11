@@ -25,7 +25,8 @@ def train():
     mid_frame = np.where(np.array(data_cfg.frames_neighbors) == 0)[0][0]
 
     device = torch.device('cuda:0')
-    net = get_net(model_cfg, num_classes=2, mid_frame=mid_frame).to(device)
+    num_classes = 5 if train_cfg.multiclass else 2
+    net = get_net(model_cfg, num_classes=num_classes, mid_frame=mid_frame).to(device)
     fitter = Fitter(model=net, device=device)
 
     try:

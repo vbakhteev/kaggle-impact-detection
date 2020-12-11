@@ -12,7 +12,13 @@ def get_dataloaders(data_cfg, train_cfg):
     root = data_cfg.root
 
     df = pd.read_csv(root / 'updated_train_labels.csv')
-    df['impact'] = df['impact'] + 1
+
+    if train_cfg.multiclass:
+        target2id = {'Helmet': 1, 'Shoulder': 2, 'shoulder': 2, 'Body': 3, 'Hand': 3, 'Ground': 4}
+        df['impact'] = df['impactType'].map(target2id) + 1
+    else:
+        df['impact'] = df['impact'] + 1
+
     valid_split = pd.read_csv(root / 'validation_split.csv')
     df = df.merge(valid_split, left_on='gameKey', right_on='gameKey')
     df_train = df[df['train'] == 1]

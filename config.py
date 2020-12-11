@@ -7,7 +7,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from easydict import EasyDict
 
 
-DESCRIPTION = "Pretrain 2D detection"
+DESCRIPTION = "Multiclass"
 
 
 def get_padded_size(side, div=128):
@@ -98,6 +98,7 @@ train = EasyDict(dict(
     valid_batch_size=7,
     lr_per_image=0.00005,
     n_epochs=30,
+    multiclass=False,
 
     step_scheduler=False,
     validation_scheduler=True,
