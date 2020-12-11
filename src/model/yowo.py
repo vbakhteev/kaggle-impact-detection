@@ -53,28 +53,3 @@ class YOWO(EfficientDet):
         x_class = self.class_net(x)
         x_box = self.box_net(x)
         return x_class, x_box
-
-
-def get_fine_tuning_parameters(model, opt):
-    ft_module_names = ['cfam', 'conv_final']  # Always fine tune 'cfam' and 'conv_final'
-    if not opt.freeze_backbone_2d:
-        ft_module_names.append('backbone_2d')  # Fine tune complete backbone_3d
-    else:
-        ft_module_names.append('backbone_2d.models.29')  # Fine tune only layer 29 and 30
-        ft_module_names.append('backbone_2d.models.30')  # Fine tune only layer 29 and 30
-
-    if not opt.freeze_backbone_3d:
-        ft_module_names.append('backbone_3d')  # Fine tune complete backbone_3d
-    else:
-        ft_module_names.append('backbone_3d.layer4')  # Fine tune only layer 4
-
-    parameters = []
-    for k, v in model.named_parameters():
-        for ft_module in ft_module_names:
-            if ft_module in k:
-                parameters.append({'params': v})
-                break
-        else:
-            parameters.append({'params': v, 'lr': 0.0})
-
-    return parameters

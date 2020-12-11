@@ -130,9 +130,9 @@ class ResNeXt(nn.Module):
         x = self.maxpool(x)  # (2, 4, 4)
 
         x1 = self.layer1(x)
-        x2 = self.layer2(x1)
-        x3 = self.layer3(x2)
-        x4 = self.layer4(x3)
+        x2 = self.layer2(x1)  # (4, 8, 8)
+        x3 = self.layer3(x2)  # (8, 16, 16)
+        x4 = self.layer4(x3)  # (16, 32, 32)
 
         return x2, x3, x4
 
