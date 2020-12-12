@@ -7,7 +7,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from easydict import EasyDict
 
 
-DESCRIPTION = "Multiclass"
+DESCRIPTION = "pretrain 2d"
 
 
 def get_padded_size(side, div=128):
@@ -24,7 +24,11 @@ pre_transforms = [
 augmentations = [
     # These geometric transforms are only for 2d detector!
     # A.HorizontalFlip(p=0.5),
-    # A.ShiftScaleRotate(shift_limit=(-0.1, 0.1), scale_limit=(-0.5, 0.5), p=0.5),
+    # A.ShiftScaleRotate(shift_limit=(-0.2, 0.2),
+    #                    scale_limit=0,
+    #                    border_mode=0,
+    #                    rotate_limit=0,
+    #                    p=0.5),
 
     A.Cutout(num_holes=200, max_h_size=img_size[0] // 72, max_w_size=img_size[0] // 72, p=0.3),
     A.OneOf([
@@ -99,7 +103,7 @@ train = EasyDict(dict(
     lr_per_image=0.00005,
     n_epochs=30,
     multiclass=False,
-    cutmix_mixup=False,
+    cutmix_mixup=True,
 
     step_scheduler=False,
     validation_scheduler=True,
@@ -126,7 +130,7 @@ model = EasyDict(dict(
     efficientdet_config='tf_efficientdet_d5',
     img_size=padded_img_size,
 
-    pretrained_effdet='pretrained_weights/effdet_d5_two_classes.bin',
+    pretrained_effdet='pretrained_weights/tf_efficientdet_d5_51-c79f9be6.pth',
     pretrained_backbone_3d='pretrained_weights/yowo_jhmdb-21_16f_best.pth',
     # if `start_from` is not empty then these weights overwrites pretrained weights.
     start_from='',
