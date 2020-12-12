@@ -18,6 +18,10 @@ def cutmix_video(images1, images2, boxes1, boxes2, labels1, labels2):
     return images1, boxes1, labels1
 
 
+def cutmix_image(image1, image2, boxes1, boxes2, labels1, labels2):
+    return image1, boxes1, labels1
+
+
 class VideoTranform:
     def __init__(self, augmentation, p=0.5):
         self.augmentation = augmentation

@@ -5,6 +5,7 @@ from torch.utils.data import ConcatDataset, DataLoader
 
 from .clip_dataset import ClipDataset, ValidationClipDataset
 from .image_dataset import ImageDataset, AdditionalImageDataset, ValidationImageDataset
+from .mix_dataset import MixDataset
 from .utils import collate_fn
 
 
@@ -31,11 +32,12 @@ def get_dataloaders(data_cfg, train_cfg):
             df=df_train[df_train['video'] == video_name],
             only_accidents=data_cfg.train_only_accidents,
             transforms=data_cfg.train_pipeline,
-            cutmix_mixup=train_cfg.cutmix_mixup,
         )
         datasets += [dataset]
-
     train_dataset = ConcatDataset(datasets)
+    if train_cfg.cutmix_mixup:
+        train_dataset = MixDataset(train_dataset, video=True)
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=train_cfg.batch_size,
@@ -45,7 +47,6 @@ def get_dataloaders(data_cfg, train_cfg):
         collate_fn=collate_fn,
         drop_last=True,
     )
-
     valid_loaders_fn = partial(
         get_valid_dataloaders,
         data_cfg=data_cfg, train_cfg=train_cfg,
@@ -106,6 +107,9 @@ def get_image_dataloaders(data_cfg, train_cfg):
     )
 
     train_dataset = ConcatDataset([train_dataset1, train_dataset2])
+    if train_cfg.cutmix_mixup:
+        train_dataset = MixDataset(train_dataset, video=False)
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=train_cfg.batch_size,
