@@ -16,3 +16,4 @@ dependencies:
     - easydict
     - sklearn
     - jpeg4py
+    - ensemble_boxes

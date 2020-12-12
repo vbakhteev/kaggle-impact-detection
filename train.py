@@ -1,4 +1,5 @@
 import os
+import itertools
 from datetime import datetime
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from config import data as data_cfg, model as model_cfg, train as train_cfg, DES
 from src.data.loaders import get_dataloaders
 from src.metric import comp_metric
 from src.model.detector import get_net, unfreeze
+from src.postprocessing import postprocessing_video
 from src.utils import seed_everything, AverageMeter
 
 
@@ -79,10 +81,10 @@ class Fitter:
                      f'box_loss: {summary_box_loss.avg:.5f}')
 
             threshold, f1, recall, precision, videos_scores = self.validation(validation_loaders_fn)
-            self.log(f'[RESULT]: Val. Epoch: {self.epoch}, threshold: {threshold}, F1: {f1:.5f},'
-                     f' Recall: {recall:.5f}, Precision: {precision:.5f}')
+            self.log(f'[RESULT]: Val. Epoch: {self.epoch}, F1: {f1:.5f}, Recall: {recall:.5f}, Precision: {precision:.5f}')
             self.log('F1 per video: ' +
                      ' '.join([f'{score:.3f}' for score in videos_scores]))
+            self.log(f'Postprocessing: {threshold},')
             self.save(self.base_dir / 'last-checkpoint.bin')
             if train_cfg.validation_scheduler:
                 self.scheduler.step(metrics=f1)
@@ -161,7 +163,7 @@ class Fitter:
         inference_model = DetBenchPredict(self.model.model).to(self.device)
 
         gt, preds, scores = [], [], []
-        for val_loader in tqdm(val_loaders_fn(), total=16):
+        for val_loader in tqdm(val_loaders_fn(), total=24):
             gt_video, video_preds, video_scores = self.predict_single_video(
                 inference_model=inference_model, val_loader=val_loader,
             )
@@ -169,20 +171,37 @@ class Fitter:
             preds += [video_preds]
             scores += [video_scores]
 
-        best_threshold, _, _, _, _ = self.find_best_threshold(
-            thresholds=np.arange(0, 1, 0.05),
+        global_thr_range = np.arange(0.05, 0.51, 0.05)
+        nms_iou_thr_range = [0.3, 0.35]
+        same_helmet_iou_thr_range = [0.3, 0.35]
+        look_future_n_frames_range = [8, 14, 20]
+        track_max_len_range = range(8, 15, 2)
+
+        best_thresholds, _, _, _, _ = self.find_best_threshold(
             gt=gt,
             preds=preds,
-            scores=scores
-        )
-        best_threshold, best_f1, best_rc, best_pr, videos_best_scores = self.find_best_threshold(
-            thresholds=np.arange(best_threshold - 0.04, best_threshold + 0.04, 0.01),
-            gt=gt,
-            preds=preds,
-            scores=scores
+            scores=scores,
+            global_thr_range=global_thr_range,
+            nms_iou_thr_range=nms_iou_thr_range,
+            same_helmet_iou_thr_range=same_helmet_iou_thr_range,
+            look_future_n_frames_range=look_future_n_frames_range,
+            track_max_len_range=track_max_len_range,
         )
 
-        return best_threshold, best_f1, best_rc, best_pr, videos_best_scores
+        best_global_thr = best_thresholds['global_thr']
+        global_thr_range = np.arange(best_global_thr - 0.04, best_global_thr + 0.04, 0.01)
+        best_thresholds, best_f1, best_rc, best_pr, videos_best_scores = self.find_best_threshold(
+            gt=gt,
+            preds=preds,
+            scores=scores,
+            global_thr_range=global_thr_range,
+            nms_iou_thr_range=nms_iou_thr_range,
+            same_helmet_iou_thr_range=same_helmet_iou_thr_range,
+            look_future_n_frames_range=look_future_n_frames_range,
+            track_max_len_range=track_max_len_range,
+        )
+
+        return best_thresholds, best_f1, best_rc, best_pr, videos_best_scores
 
     def predict_single_video(self, inference_model, val_loader):
         video_gt_boxes, video_boxes, video_scores, video_frames_preds, video_frames_gt = [], [], [], [], []
@@ -242,33 +261,56 @@ class Fitter:
 
         return gt_video, video_preds, video_scores
 
-    def find_best_threshold(self, thresholds, gt, preds, scores):
+    def find_best_threshold(
+            self, gt, preds, scores,
+            global_thr_range,
+            nms_iou_thr_range,
+            same_helmet_iou_thr_range,
+            look_future_n_frames_range,
+            track_max_len_range,
+    ):
         best_rc = best_pr = best_f1 = best_threshold = -1
         videos_best_scores = None
 
-        for threshold in thresholds:
+        it_params = itertools.product(
+            global_thr_range,
+            nms_iou_thr_range,
+            same_helmet_iou_thr_range,
+            look_future_n_frames_range,
+            track_max_len_range,
+        )
 
-            thresholded_preds = []
-            for video_preds, video_scores in zip(preds, scores):
-                thresholded_video_preds = video_preds[video_scores >= threshold]
-                thresholded_preds += [thresholded_video_preds]
+        for global_thr, nms_iou_thr, same_helmet_iou_thr, look_future_n_frames, track_max_len in it_params:
+            preds_processed = [
+                postprocessing_video(
+                    preds, scores,
+                    global_thr=global_thr,
+                    nms_iou_thr=nms_iou_thr,
+                    same_helmet_iou_thr=same_helmet_iou_thr,
+                    look_future_n_frames=look_future_n_frames,
+                    track_max_len=track_max_len,
+                )[0] for preds, scores in zip(preds, scores)]
 
-            precision, recall, f1_score, f1_per_video = comp_metric(thresholded_preds, gt)
+            precision, recall, f1_score, f1_per_video = comp_metric(preds_processed, gt)
             if f1_score > best_f1:
                 best_f1 = f1_score
                 best_rc = recall
                 best_pr = precision
-                best_threshold = threshold
+                best_thresholds = {
+                    'global_thr': global_thr,
+                    'nms_iou_thr': nms_iou_thr,
+                    'same_helmet_iou_thr': same_helmet_iou_thr,
+                    'look_future_n_frames': look_future_n_frames,
+                    'track_max_len': track_max_len,
+                }
                 videos_best_scores = f1_per_video
 
-        return best_threshold, best_f1, best_rc, best_pr, videos_best_scores
+        return best_thresholds, best_f1, best_rc, best_pr, videos_best_scores
 
     def save(self, path):
         self.model.eval()
         torch.save({
             'model_state_dict': self.model.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict(),
             'best_metric': self.best_metric,
             'epoch': self.epoch,
         }, path)
@@ -276,8 +318,6 @@ class Fitter:
     def load(self, path):
         checkpoint = torch.load(path)
         self.model.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         self.best_metric = checkpoint['best_metric']
         self.epoch = checkpoint['epoch'] + 1
 

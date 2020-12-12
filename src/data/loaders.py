@@ -62,8 +62,8 @@ def get_valid_dataloaders(data_cfg, train_cfg):
     df = df.merge(valid_split, left_on='gameKey', right_on='gameKey')
     df = df[df['train'] == 0]
 
-
-    for video_name in df['video'].unique():
+    video_names = df['video'].unique()
+    for video_name in video_names:
         df_video = df[df['video'] == video_name]
         dataset = ValidationClipDataset(
             video_path=root / 'train' / video_name,
