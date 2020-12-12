@@ -15,5 +15,4 @@ dependencies:
     - albumentations
     - easydict
     - sklearn
-    - jpeg4py
     - ensemble_boxes
