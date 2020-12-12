@@ -99,7 +99,7 @@ train = EasyDict(dict(
     lr_per_image=0.00005,
     n_epochs=30,
     multiclass=False,
-    cutmix_mixup=True,
+    cutmix_mixup=False,
 
     step_scheduler=False,
     validation_scheduler=True,
@@ -126,7 +126,7 @@ model = EasyDict(dict(
     efficientdet_config='tf_efficientdet_d5',
     img_size=padded_img_size,
 
-    pretrained_effdet='pretrained_weights/tf_efficientdet_d5_51-c79f9be6.pth',
+    pretrained_effdet='pretrained_weights/effdet_d5_two_classes.bin',
     pretrained_backbone_3d='pretrained_weights/yowo_jhmdb-21_16f_best.pth',
     # if `start_from` is not empty then these weights overwrites pretrained weights.
     start_from='',
