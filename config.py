@@ -99,6 +99,7 @@ train = EasyDict(dict(
     lr_per_image=0.00005,
     n_epochs=30,
     multiclass=False,
+    cutmix_mixup=True,
 
     step_scheduler=False,
     validation_scheduler=True,

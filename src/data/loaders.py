@@ -31,6 +31,7 @@ def get_dataloaders(data_cfg, train_cfg):
             df=df_train[df_train['video'] == video_name],
             only_accidents=data_cfg.train_only_accidents,
             transforms=data_cfg.train_pipeline,
+            cutmix_mixup=train_cfg.cutmix_mixup,
         )
         datasets += [dataset]
 

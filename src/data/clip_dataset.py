@@ -7,15 +7,16 @@ import torch
 from torch.utils.data import Dataset
 
 from .utils import get_video_len, read_img_cv2, read_video
-from .transforms import HorizontalFlip, ShiftScale
+from .transforms import HorizontalFlip, ShiftScale, cutmix_video, mixup_video
 
 class ClipDataset(Dataset):
-    def __init__(self, video_path, neighbors: tuple, df, transforms=None, only_accidents=False):
+    def __init__(self, video_path, neighbors: tuple, df, transforms=None, only_accidents=False, cutmix_mixup=False):
         self.video_path = Path(video_path)
         self.images_dir = self.video_path.parent.parent / 'train_images'
         self.df = df[df['video'] == self.video_path.name]
         self.transforms = transforms        # Color transforms
         self.only_accidents = only_accidents
+        self.cutmix_mixup = cutmix_mixup
 
         self.min = min(neighbors)
         self.max = max(neighbors)
@@ -29,6 +30,29 @@ class ClipDataset(Dataset):
         )
 
     def __getitem__(self, index):
+        images1, boxes1, labels1 = self.get_sample(index)
+
+        if self.cutmix_mixup:
+            random_index = random.randint(0, self.__len__() - 1)
+            images2, boxes2, labels2 = self.get_sample(random_index)
+
+            if random.random() < 0.5:
+                images, boxes, labels = mixup_video(
+                    images1, images2, boxes1, boxes2, labels1, labels2
+                )
+            else:
+                images, boxes, labels = cutmix_video(
+                    images1, images2, boxes1, boxes2, labels1, labels2
+                )
+
+        else:
+            images = images1
+            boxes = boxes1
+            labels = labels1
+
+        return images, {'boxes': boxes, 'labels': labels}
+
+    def get_sample(self, index):
         index += abs(self.min)
         images, boxes, labels = self.load_images_and_boxes(index)
 
@@ -48,12 +72,8 @@ class ClipDataset(Dataset):
         )).permute(1, 0)
         boxes[:, [0, 1, 2, 3]] = boxes[:, [1, 0, 3, 2]]  # yxyx: be warning
 
-        target = dict(
-            boxes=boxes,
-            labels=torch.tensor(labels),
-        )
+        return torch.stack(images, dim=1), boxes, torch.tensor(labels)
 
-        return torch.stack(images, dim=1), target
 
     def load_images_and_boxes(self, index):
         frame_indexes = self.neighbors + index

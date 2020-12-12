@@ -1,6 +1,21 @@
 import random
 
 import albumentations as albu
+import torch
+
+
+@torch.no_grad()
+def mixup_video(images1, images2, boxes1, boxes2, labels1, labels2):
+    images = (images1 + images2) / 2
+    boxes = torch.cat([boxes1, boxes2])
+    labels = torch.cat([labels1, labels2])
+    return images, boxes, labels
+
+
+@torch.no_grad()
+def cutmix_video(images1, images2, boxes1, boxes2, labels1, labels2):
+    # TODO implement cutmix
+    return images1, boxes1, labels1
 
 
 class VideoTranform:
