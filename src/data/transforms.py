@@ -5,7 +5,7 @@ import torch
 
 
 @torch.no_grad()
-def mixup_video(images1, images2, boxes1, boxes2, labels1, labels2):
+def mixup(images1, images2, boxes1, boxes2, labels1, labels2):
     images = (images1 + images2) / 2
     boxes = torch.cat([boxes1, boxes2])
     labels = torch.cat([labels1, labels2])
@@ -15,11 +15,46 @@ def mixup_video(images1, images2, boxes1, boxes2, labels1, labels2):
 @torch.no_grad()
 def cutmix_video(samples: list):
     """
-    samples: [(images, boxes, labels)]. Len=2
+    samples: [(video, boxes, labels)]. Len=2
     """
-    # TODO implement cutmix
-    images1, boxes1, labels1 = samples[0]
-    return images1, boxes1, labels1
+    sample1, sample2 = samples
+    video1, boxes1, labels1 = sample1
+    video2, boxes2, labels2 = sample2
+    l, h, w = video1.shape[1:]
+
+    horizontal_cut = random.random() < 0.666
+    result_video = video1.clone()
+    if horizontal_cut:
+        mid = int(random.uniform(w * 0.3, w * 0.7))
+        result_video[:, :, :, mid:] = video2[:, :, :, mid:]
+
+        valid_boxes1 = boxes1[:, 1] < mid
+        boxes1 = boxes1[valid_boxes1]
+        labels1 = labels1[valid_boxes1]
+        torch.clamp(boxes1[:, 3], max=mid, out=boxes1[:, 3])
+
+        valid_boxes2 = boxes2[:, 3] > mid
+        boxes2 = boxes2[valid_boxes2]
+        labels2 = labels2[valid_boxes2]
+        torch.clamp(boxes2[:, 1], min=mid, out=boxes2[:, 1])
+
+    else:
+        mid = int(random.uniform(h * 0.25, h * 0.25))
+        result_video[:, :, mid:, :] = video2[:, :, mid:, :]
+
+        valid_boxes1 = boxes1[:, 0] < mid
+        boxes1 = boxes1[valid_boxes1]
+        labels1 = labels1[valid_boxes1]
+        torch.clamp(boxes1[:, 2], max=mid, out=boxes1[:, 2])
+
+        valid_boxes2 = boxes2[:, 2] > mid
+        boxes2 = boxes2[valid_boxes2]
+        labels2 = labels2[valid_boxes2]
+        torch.clamp(boxes2[:, 0], min=mid, out=boxes2[:, 0])
+
+    result_boxes = torch.cat((boxes1, boxes2))
+    result_labels = torch.cat((labels1, labels2))
+    return result_video, result_boxes, result_labels
 
 
 @torch.no_grad()

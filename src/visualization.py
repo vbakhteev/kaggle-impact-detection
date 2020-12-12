@@ -7,9 +7,6 @@ def draw_hits_video(video_path, preds, scores, out_path=None):
     video = read_video(video_path)
 
     for pred, score in zip(preds, scores):
-        if score < 0.1:
-            continue
-
         frame = pred[0]
         box = pred[1:]
 

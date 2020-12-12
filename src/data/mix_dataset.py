@@ -2,7 +2,7 @@ import random
 
 from torch.utils.data import Dataset
 
-from src.data.transforms import mixup_video, cutmix_video, cutmix_image
+from src.data.transforms import mixup, cutmix_video, cutmix_image
 
 
 class MixDataset(Dataset):
@@ -14,13 +14,16 @@ class MixDataset(Dataset):
         images1, target1 = self.dataset[index]
         boxes1, labels1 = target1['boxes'], target1['labels']
 
+        if random.random() < 0.333:
+            return images1, target1
+
         random_index = random.randint(0, len(self.dataset) - 1)
         images2, target2 = self.dataset[random_index]
         boxes2, labels2 = target2['boxes'], target2['labels']
 
         # MixUp
         if random.random() < 0.5:
-            images, boxes, labels = mixup_video(
+            images, boxes, labels = mixup(
                 images1, images2, boxes1, boxes2, labels1, labels2
             )
 
