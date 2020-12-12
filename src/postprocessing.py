@@ -6,8 +6,11 @@ from src.metric import iou
 
 
 def postprocessing_video(
-        preds, scores, global_thr, nms_iou_thr, same_helmet_iou_thr,
-        look_future_n_frames, track_max_len,
+        preds, scores, global_thr,
+        nms_iou_thr=0.35,
+        same_helmet_iou_thr=0.35,
+        look_future_n_frames=14,
+        track_max_len=10,
 ):
     """
     params:
