@@ -1,5 +1,4 @@
 import cv2
-import jpeg4py
 import numpy as np
 
 
@@ -11,10 +10,6 @@ def read_img_cv2(filename):
     image = cv2.imread(str(filename), cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image
-
-def read_img_jpeg4py(path):
-    img = jpeg4py.JPEG(str(path)).decode()
-    return img
 
 
 def read_frames(video_path, frame_indexes) -> list:
