@@ -41,7 +41,18 @@ def postprocessing_video(
 
 def threshold_preds(preds, scores, threshold):
     cond = scores > threshold
-    return preds[cond], scores[cond]
+    preds = preds[cond]
+    scores = scores[cond]
+
+    np.clip(preds[:, 1], 0, 1280, out=preds[:, 1])
+    np.clip(preds[:, 3], 0, 1280, out=preds[:, 3])
+    np.clip(preds[:, 2], 0, 720, out=preds[:, 2])
+    np.clip(preds[:, 4], 0, 720, out=preds[:, 4])
+
+    cond = (preds[:, 3] - preds[:, 1]) * (preds[:, 4] - preds[:, 2]) > 0
+    preds = preds[cond]
+    scores = scores[cond]
+    return preds, scores
 
 def filter_by_frame(preds, scores, iou_thr=0.25):
     """Apply nms for each frame independently
