@@ -1,6 +1,7 @@
 import torch
 from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain
 from effdet.config import set_config_readonly, set_config_writeable
+from torch.utils.checkpoint import checkpoint
 
 from .yowo import YOWO
 
@@ -31,9 +32,22 @@ def get_net(model_cfg, num_classes, mid_frame):
     return DetBenchTrain(net, config)
 
 
+class EfficientDetCheckpoined(EfficientDet):
+    def forward_backbone(self, x):
+        x = self.backbone(x)
+        return tuple(x)
+
+    def forward(self, x):
+        x = checkpoint(self.forward_backbone, x)
+        x = self.fpn(list(x))
+        x_class = self.class_net(x)
+        x_box = self.box_net(x)
+        return x_class, x_box
+
+
 def get_effdet(model_cfg, num_classes):
     config = get_efficientdet_config(model_cfg.efficientdet_config)
-    net = EfficientDet(config, pretrained_backbone=True)
+    net = EfficientDetCheckpoined(config, pretrained_backbone=True)
 
     if model_cfg.pretrained_effdet != '':
         load_state_dict(net, model_cfg.pretrained_effdet)
@@ -83,6 +97,7 @@ def soft_load_state_dict(model, state_dict):
 
     if len(not_loaded_params):
         print("WARNING: following params couldn't loaded into model:", not_loaded_params)
+
 
 def freeze(model):
     for param in model.parameters():
