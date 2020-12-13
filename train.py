@@ -269,8 +269,8 @@ class Fitter:
             look_future_n_frames_range,
             track_max_len_range,
     ):
-        best_rc = best_pr = best_f1 = best_threshold = -1
-        videos_best_scores = None
+        best_rc = best_pr = best_f1 = -1
+        best_thresholds = videos_best_scores = None
 
         it_params = itertools.product(
             global_thr_range,
