@@ -172,10 +172,10 @@ class Fitter:
             scores += [video_scores]
 
         global_thr_range = np.arange(0.05, 0.51, 0.05)
-        nms_iou_thr_range = [0.3, 0.35]
-        same_helmet_iou_thr_range = [0.3, 0.35]
-        look_future_n_frames_range = [8, 14, 20]
-        track_max_len_range = range(8, 15, 2)
+        nms_iou_thr_range = [0.3]
+        same_helmet_iou_thr_range = [0.3]
+        look_future_n_frames_range = [14]
+        track_max_len_range = [10]
 
         best_thresholds, _, _, _, _ = self.find_best_threshold(
             gt=gt,
