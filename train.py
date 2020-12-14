@@ -1,7 +1,8 @@
-import os
 import itertools
+import os
 from datetime import datetime
 from pathlib import Path
+from functools import partial
 
 import numpy as np
 import torch
@@ -10,11 +11,12 @@ from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 from config import data as data_cfg, model as model_cfg, train as train_cfg, DESCRIPTION
-from src.data.loaders import get_dataloaders
+from src.data.loaders import get_train_dataloader, get_valid_dataloaders
 from src.metric import comp_metric
 from src.model.detector import get_net, unfreeze
 from src.postprocessing import postprocessing_video
 from src.utils import seed_everything, AverageMeter
+from src.multigrid import MultigridSchedule
 
 
 def main():
@@ -23,7 +25,8 @@ def main():
 
 
 def train():
-    loader_train, loaders_valid_fn = get_dataloaders(data_cfg, train_cfg)
+    loaders_valid_fn = partial(get_valid_dataloaders, data_cfg, train_cfg)
+
     mid_frame = np.where(np.array(data_cfg.frames_neighbors) == 0)[0][0]
 
     device = torch.device('cuda:0')
@@ -32,7 +35,7 @@ def train():
     fitter = Fitter(model=net, device=device)
 
     try:
-        fitter.fit(loader_train, loaders_valid_fn)
+        fitter.fit(loaders_valid_fn)
     except KeyboardInterrupt:
         pass
 
@@ -53,35 +56,54 @@ class Fitter:
         self.best_metric = -1
         self.early_stopping_patience = train_cfg.early_stopping_patience
         self.epochs_without_improvement = 0
+        self.previous_metrics = []
 
+        self.multigrid = MultigridSchedule()
+        self.multigrid.init_multigrid(train_cfg, data_cfg)
+        self.multigrid.update_long_cycle(train_cfg, data_cfg, cur_epoch=0)
+
+        self.train_loader = get_train_dataloader(data_cfg, train_cfg)
+        self.scaler = GradScaler()
+        self.optimizer, self.scheduler = self.get_optimizer()
+        self.log(f'Fitter prepared. Device is {self.device}')
+        self.log(DESCRIPTION)
+
+    def get_optimizer(self):
         param_optimizer = list(self.model.named_parameters())
         no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
         optimizer_grouped_parameters = [
             {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 1e-6},
             {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
+        optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=train_cfg.lr)
+        scheduler = train_cfg.SchedulerClass(self.optimizer, **train_cfg.scheduler_params)
+        for f1 in self.previous_metrics:
+            scheduler.step(metrics=f1)
 
-        self.scaler = GradScaler()
-        self.optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=train_cfg.lr)
-        self.scheduler = train_cfg.SchedulerClass(self.optimizer, **train_cfg.scheduler_params)
-        self.log(f'Fitter prepared. Device is {self.device}')
-        self.log(DESCRIPTION)
+        return optimizer, scheduler
 
-    def fit(self, train_loader, validation_loaders_fn):
+    def fit(self, validation_loaders_fn):
         for e in range(train_cfg.n_epochs):
+            changed = self.multigrid.update_long_cycle(train_cfg, data_cfg, e)
+            if changed:
+                self.optimizer, self.scheduler = self.get_optimizer()
+                self.train_loader = get_train_dataloader(data_cfg, train_cfg)
+
             if train_cfg.verbose:
                 lr = self.optimizer.param_groups[0]['lr']
                 timestamp = datetime.utcnow().isoformat()
                 self.log(f'\n{timestamp}\nLR: {lr}')
 
-            summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch(train_loader)
+            summary_loss, summary_class_loss, summary_box_loss = self.train_one_epoch()
             self.log(f'[RESULT]: Train. Epoch: {self.epoch}, '
                      f'loss: {summary_loss.avg:.5f}, '
                      f'class_loss: {summary_class_loss.avg:.5f}, '
                      f'box_loss: {summary_box_loss.avg:.5f}')
 
             threshold, f1, recall, precision, videos_scores = self.validation(validation_loaders_fn)
-            self.log(f'[RESULT]: Val. Epoch: {self.epoch}, F1: {f1:.5f}, Recall: {recall:.5f}, Precision: {precision:.5f}')
+            self.log(
+                f'[RESULT]: Val. Epoch: {self.epoch}, F1: {f1:.5f}, Recall: {recall:.5f}, Precision: {precision:.5f}'
+            )
             self.log('F1 per video: ' +
                      ' '.join([f'{score:.3f}' for score in videos_scores]))
             self.log(f'Postprocessing: {threshold},')
@@ -111,11 +133,11 @@ class Fitter:
 
             self.epoch += 1
 
-    def train_one_epoch(self, train_loader):
+    def train_one_epoch(self):
         self.model.train()
         summary_loss, summary_class_loss, summary_box_loss = [AverageMeter() for _ in range(3)]
 
-        it = tqdm(train_loader, total=len(train_loader))
+        it = tqdm(self.train_loader, total=len(self.train_loader))
         for images, targets in it:
             msg = f'Train loss: {summary_loss.avg:.5f}, ' \
                   f'class_loss: {summary_class_loss.avg:.5f}, ' \

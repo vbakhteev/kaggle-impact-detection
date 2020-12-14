@@ -9,7 +9,7 @@ from .mix_dataset import MixDataset
 from .utils import collate_fn
 
 
-def get_dataloaders(data_cfg, train_cfg):
+def get_train_dataloader(data_cfg, train_cfg):
     root = data_cfg.root
 
     df = pd.read_csv(root / 'updated_train_labels.csv')
@@ -47,12 +47,8 @@ def get_dataloaders(data_cfg, train_cfg):
         collate_fn=collate_fn,
         drop_last=True,
     )
-    valid_loaders_fn = partial(
-        get_valid_dataloaders,
-        data_cfg=data_cfg, train_cfg=train_cfg,
-    )
 
-    return train_loader, valid_loaders_fn
+    return train_loader
 
 
 def get_valid_dataloaders(data_cfg, train_cfg):

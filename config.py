@@ -6,7 +6,6 @@ import torch
 from albumentations.pytorch.transforms import ToTensorV2
 from easydict import EasyDict
 
-
 DESCRIPTION = "pretrain 2d"
 
 
@@ -89,7 +88,7 @@ valid_pipeline = A.Compose(
 )
 
 data = EasyDict(dict(
-    root=Path('/dataset/nfl'),      # /home/vladbakhteev/data/nfl-impact-detection
+    root=Path('/dataset/nfl'),  # /home/vladbakhteev/data/nfl-impact-detection
     train_only_accidents=False,
     frames_neighbors=(-12, -9, -6, -3, 0, 3, 6, 9),
     train_pipeline=train_pipeline,
@@ -104,6 +103,21 @@ train = EasyDict(dict(
     n_epochs=30,
     multiclass=False,
     cutmix_mixup=True,
+
+    multigrid=dict(
+        # Short cycle additional spatial dimensions relative to the default crop size.
+        SHORT_CYCLE_FACTORS=[0.5, 0.5 ** 0.5],
+        # (Temporal, Spatial) dimensions relative to the default shape.
+        LONG_CYCLE_FACTORS=[
+            (0.25, 0.5 ** 0.5),
+            (0.5, 0.5 ** 0.5),
+            (0.5, 1),
+            (1, 1),
+        ],
+        # While a standard BN computes stats across all examples in a GPU,
+        # for multigrid training we fix the number of clips to compute BN stats on.
+        BN_BASE_SIZE=8,
+    ),
 
     step_scheduler=False,
     validation_scheduler=True,
