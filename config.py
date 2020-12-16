@@ -15,7 +15,7 @@ def get_padded_size(side, div=128):
 
 
 # img_size = (720, 1280)
-img_size = (512, 884)
+img_size = (512, 896)
 padded_img_size = (get_padded_size(img_size[0]), get_padded_size(img_size[1]))
 
 pre_transforms = [
@@ -89,7 +89,7 @@ valid_pipeline = A.Compose(
 )
 
 data = EasyDict(dict(
-    root=Path('/dataset/nfl'),      # /home/vladbakhteev/data/nfl-impact-detection
+    root=Path('/home/datasets/nfl'),      # /home/vladbakhteev/data/nfl-impact-detection
     train_only_accidents=False,
     frames_neighbors=(-12, -9, -6, -3, 0, 3, 6, 9),
     train_pipeline=train_pipeline,
@@ -130,7 +130,7 @@ model = EasyDict(dict(
     efficientdet_config='tf_efficientdet_d5',
     img_size=padded_img_size,
 
-    pretrained_effdet='pretrained_weights/tf_efficientdet_d5_51-c79f9be6.pth',
+    pretrained_effdet='',
     pretrained_backbone_3d='pretrained_weights/yowo_jhmdb-21_16f_best.pth',
     # if `start_from` is not empty then these weights overwrites pretrained weights.
     start_from='',
