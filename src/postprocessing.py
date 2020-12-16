@@ -6,7 +6,8 @@ from src.metric import iou
 
 
 def postprocessing_video(
-        preds, scores, global_thr,
+        preds, scores, labels,
+        global_thr,
         nms_iou_thr=0.35,
         same_helmet_iou_thr=0.35,
         look_future_n_frames=14,
@@ -24,11 +25,12 @@ def postprocessing_video(
             then terminate track.
         track_max_len - terminate track if it's len exceed this value.
     """
-    preds, scores = threshold_preds(preds, scores, threshold=global_thr)
-    preds, scores = filter_by_frame(preds, scores, iou_thr=nms_iou_thr)
+    preds, scores, labels = filter_helmets(preds, scores, labels)
+    preds, scores, labels = threshold_preds(preds, scores, labels, threshold=global_thr)
+    preds, scores, labels = filter_by_frame(preds, scores, labels, iou_thr=nms_iou_thr)
 
     tracks = generate_tracks(
-        preds, scores,
+        preds, scores, labels,
         same_helmet_iou_thr=same_helmet_iou_thr,
         look_future_n_frames=look_future_n_frames,
         track_max_len=track_max_len,
@@ -39,10 +41,17 @@ def postprocessing_video(
 
     return preds, scores
 
-def threshold_preds(preds, scores, threshold):
+
+def filter_helmets(preds, scores, labels):
+    cond = labels != 1
+    return preds[cond], scores[cond], labels[cond]
+
+
+def threshold_preds(preds, scores, labels, threshold):
     cond = scores > threshold
     preds = preds[cond]
     scores = scores[cond]
+    labels = labels[cond]
 
     np.clip(preds[:, 1], 0, 1280, out=preds[:, 1])
     np.clip(preds[:, 3], 0, 1280, out=preds[:, 3])
@@ -52,16 +61,18 @@ def threshold_preds(preds, scores, threshold):
     cond = (preds[:, 3] - preds[:, 1]) * (preds[:, 4] - preds[:, 2]) > 0
     preds = preds[cond]
     scores = scores[cond]
-    return preds, scores
+    labels = labels[cond]
+    return preds, scores, labels
 
-def filter_by_frame(preds, scores, iou_thr=0.25):
+
+def filter_by_frame(preds, scores, labels, iou_thr=0.25):
     """Apply nms for each frame independently
     params:
         preds: (N, 5)
         scores: (N,)
     """
     if preds.shape[0] == 0:
-        return preds, scores
+        return preds, scores, labels
 
     frames = preds[:, 0]
     boxes = preds[:, 1:].astype(float)
@@ -71,17 +82,18 @@ def filter_by_frame(preds, scores, iou_thr=0.25):
     boxes[:, 1] = boxes[:, 1] / 720
     boxes[:, 3] = boxes[:, 3] / 720
 
-    result_preds, result_scores = [], []
+    result_preds, result_scores, result_labels = [], [], []
     for frame in sorted(list(set(frames))):
         cond = frames == frame
 
         boxes_frame = boxes[cond]
         scores_frame = scores[cond]
+        labels_frame = labels[cond]
 
-        boxes_nms, scores_nms, _ = nms(
+        boxes_nms, scores_nms, labels_nms = nms(
             [boxes_frame],
             [scores_frame],
-            [np.ones_like(scores_frame)],
+            [labels_frame],
             iou_thr=iou_thr,
         )
 
@@ -98,16 +110,18 @@ def filter_by_frame(preds, scores, iou_thr=0.25):
 
         result_preds += [preds]
         result_scores += [scores_nms]
+        result_labels += [labels_nms]
 
     if len(scores) == 0:
-        return np.zeros((0, 5), dtype=int), np.zeros(0)
+        return np.zeros((0, 5), dtype=int), np.zeros(0), np.zeros(0)
 
     result_preds = np.concatenate(result_preds)
     result_scores = np.concatenate(result_scores)
-    return result_preds, result_scores
+    result_labels = np.concatenate(result_labels)
+    return result_preds, result_scores, result_labels
 
 
-def generate_tracks(preds, scores, same_helmet_iou_thr=0.5, look_future_n_frames=8, track_max_len=8):
+def generate_tracks(preds, scores, labels, same_helmet_iou_thr=0.5, look_future_n_frames=8, track_max_len=8):
     N = preds.shape[0]
     tracks = []
     processed = set()

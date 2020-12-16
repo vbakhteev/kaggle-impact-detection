@@ -162,14 +162,15 @@ class Fitter:
         self.model.eval()
         inference_model = DetBenchPredict(self.model.model).to(self.device)
 
-        gt, preds, scores = [], [], []
+        gt, preds, scores, labels = [], [], [], []
         for val_loader in tqdm(val_loaders_fn(), total=24):
-            gt_video, video_preds, video_scores = self.predict_single_video(
+            gt_video, video_preds, video_scores, video_labels = self.predict_single_video(
                 inference_model=inference_model, val_loader=val_loader,
             )
             gt += [gt_video]
             preds += [video_preds]
             scores += [video_scores]
+            labels += [video_labels]
 
         global_thr_range = np.arange(0.05, 0.51, 0.05)
         nms_iou_thr_range = [0.3]
@@ -181,6 +182,7 @@ class Fitter:
             gt=gt,
             preds=preds,
             scores=scores,
+            labels=labels,
             global_thr_range=global_thr_range,
             nms_iou_thr_range=nms_iou_thr_range,
             same_helmet_iou_thr_range=same_helmet_iou_thr_range,
@@ -194,6 +196,7 @@ class Fitter:
             gt=gt,
             preds=preds,
             scores=scores,
+            labels=labels,
             global_thr_range=global_thr_range,
             nms_iou_thr_range=nms_iou_thr_range,
             same_helmet_iou_thr_range=same_helmet_iou_thr_range,
@@ -204,7 +207,8 @@ class Fitter:
         return best_thresholds, best_f1, best_rc, best_pr, videos_best_scores
 
     def predict_single_video(self, inference_model, val_loader):
-        video_gt_boxes, video_boxes, video_scores, video_frames_preds, video_frames_gt = [], [], [], [], []
+        video_gt_boxes, video_boxes, video_scores = [], [], []
+        video_frames_preds, video_frames_gt, predicted_labels = [], [], []
 
         for images, gt_boxes, frame_ids in val_loader:
             images = torch.stack(images)
@@ -222,19 +226,12 @@ class Fitter:
             output[:, :, 1] = output[:, :, 1] * height_scale
             output[:, :, 3] = output[:, :, 3] * height_scale
 
-            # Keep only accident boxes and corresponding scores
-            labels = output[:, :, 5]
-            cond = (labels != 1)
-            indexes = [np.where(c)[0] for c in cond]
-            output = [
-                sample_output[sample_indexes]
-                for sample_output, sample_indexes in zip(output, indexes)
-            ]
-
             boxes = [o[:, :4].astype(int) for o in output]
             scores = [o[:, 4] for o in output]
+            labels = [o[:, 5] for o in output]
             video_boxes += boxes
             video_scores += scores
+            predicted_labels += labels
             video_frames_preds += frame_ids
 
             # Keep GT boxes and frame_ids
@@ -258,11 +255,12 @@ class Fitter:
         # Concat predictions of 1 video into array
         video_preds = np.concatenate(video_preds, axis=0)  # (N_predicted_boxes, 5)
         video_scores = np.concatenate(video_scores, axis=0)  # (N_predicted_boxes,)
+        predicted_labels = np.concatenate(predicted_labels, axis=0)
 
-        return gt_video, video_preds, video_scores
+        return gt_video, video_preds, video_scores, predicted_labels
 
     def find_best_threshold(
-            self, gt, preds, scores,
+            self, gt, preds, scores, labels,
             global_thr_range,
             nms_iou_thr_range,
             same_helmet_iou_thr_range,
@@ -283,13 +281,13 @@ class Fitter:
         for global_thr, nms_iou_thr, same_helmet_iou_thr, look_future_n_frames, track_max_len in it_params:
             preds_processed = [
                 postprocessing_video(
-                    preds, scores,
+                    preds_, scores_, labels_,
                     global_thr=global_thr,
                     nms_iou_thr=nms_iou_thr,
                     same_helmet_iou_thr=same_helmet_iou_thr,
                     look_future_n_frames=look_future_n_frames,
                     track_max_len=track_max_len,
-                )[0] for preds, scores in zip(preds, scores)]
+                )[0] for preds_, scores_, labels_ in zip(preds, scores, labels)]
 
             precision, recall, f1_score, f1_per_video = comp_metric(preds_processed, gt)
             if f1_score > best_f1:
