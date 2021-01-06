@@ -4,6 +4,8 @@
 The goal of competition is to develop a computer vision model that automatically detects helmet impacts that occur on the field.
 Given data is RGB videos with labeled bounding boxes.
 
+<img src="result.gif" width="740" height="360">
+
 ## Approach
 
 Several frames around central are taken to capture temporal context.
